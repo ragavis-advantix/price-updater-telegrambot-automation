@@ -1,0 +1,526 @@
+{
+  "name": "Price Updater TelegramBot",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1184,
+        16
+      ],
+      "id": "e5d710d1-c558-407e-b917-c1cd82de0b80",
+      "name": "Telegram Trigger",
+      "webhookId": "4078c541-5651-45c5-bc93-e09b116009df",
+      "alwaysOutputData": false,
+      "credentials": {
+        "telegramApi": {
+          "id": "btjmQEglnlGJbr1e",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.0-flash",
+        "options": {
+          "maxOutputTokens": 1024,
+          "temperature": 0.7
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        272
+      ],
+      "id": "b7712298-e832-49e4-a689-be2b10f8348a",
+      "name": "Gemini AI Agent",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "RbSzz4BwQmhmi2VL",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process AI response and determine message type for Telegram\nconst items = [];\nconst telegramData = $('Telegram Trigger').first().json;\n\nconst chatId = telegramData.message.chat.id;\nconst messageText = telegramData.message.text.trim();\nconst userId = telegramData.message.from.id;\nconst userName = telegramData.message.from.first_name || 'User';\n\nlet reply = '';\nlet sku = null;\nlet isWelcomeMessage = false;\n\nconst lowerText = messageText.toLowerCase();\n\n// 1️⃣ Greeting / casual message\nif (\n    lowerText.includes('hi') ||\n    lowerText.includes('hello') ||\n    lowerText.includes('good morning') ||\n    lowerText.includes('good afternoon') ||\n    lowerText.includes('how are you') ||\n    messageText === '/start' ||\n    messageText === '/help'\n) {\n    isWelcomeMessage = true;\n    reply = \"Hey there, superstar! 🌟 I'm PriceUpdaterBot, your trusty price detective. Send me a SKU code or product name, and I'll fetch the magic number for you! \";\n}\n// 2️⃣ Price lookup / SKU / product detection (from AI or message)\nelse if (\n    messageText.match(/^[A-Z0-9_-]{3,}$/i) ||   // SKU pattern\n    lowerText.includes('price') ||\n    lowerText.includes('sku') ||\n    lowerText.includes('product') ||\n    lowerText.startsWith('/price')\n) {\n    // Extract SKU from /price command if present\n    if (lowerText.startsWith('/price')) {\n        sku = messageText.replace(/\\/price\\s+/i, '').trim().toUpperCase();\n    } else {\n        sku = messageText.toUpperCase();\n    }\n\n    reply = `[[FORWARD_TO_N8N_PRICE_LOOKUP: ${messageText}]]`;\n}\n// 3️⃣ Unrelated / meta messages\nelse {\n    reply = \"Oops! 🤖 I'm PriceUpdaterBot, master of prices only. Toss me a SKU or product name, and I’ll serve you the numbers!\";\n}\n\n// Push final Telegram-ready output\nitems.push({\n    json: {\n        chatId,\n        userId,\n        userName,\n        messageText,\n        sku,\n        isWelcomeMessage,\n        aiResponse: reply,\n        updateId: telegramData.update_id || Date.now(),\n        productName: null\n    }\n});\n\nreturn items;\n"
+      },
+      "id": "e4b29138-485e-4008-9f57-37d2aeedb2cd",
+      "name": "Process AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $('Process AI Response').item.json.aiResponse }}\"",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "7181ae34-f963-4f6a-a8cc-3cfec3e64fa7",
+      "name": "Send Welcome Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        -176,
+        -96
+      ],
+      "webhookId": "w1x2y3z4-a5b6-c7d8-e9f0-g1h2i3j4k5l6",
+      "credentials": {
+        "telegramApi": {
+          "id": "btjmQEglnlGJbr1e",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "sku-condition",
+              "leftValue": "={{ $json.sku }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            },
+            {
+              "id": "815484ed-7800-4f05-b26a-973b2027f4b7",
+              "leftValue": "={{ $('Process AI Response').item.json.sku }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "9401b31f-14e2-49bb-b077-5a53acca19d1",
+      "name": "Is SKU Detected?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "products",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        96,
+        112
+      ],
+      "id": "8af0efa1-7314-4359-a324-9f0511848b2a",
+      "name": "Get Products from Supabase",
+      "credentials": {
+        "supabaseApi": {
+          "id": "tDCqQOb2mTUE9Yt1",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "91869aa8-dd11-4259-9428-29e015f51b1e",
+              "leftValue": "={{$json.sku.toUpperCase()}}",
+              "rightValue": "={{ $('Process AI Response').item.json.sku }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        304,
+        112
+      ],
+      "id": "40b6c27d-31d8-4ac4-9a76-1d293e07a4c6",
+      "name": "Filter Matching SKU",
+      "executeOnce": false,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Process AI Response').item.json.chatId }}",
+        "text": "=✅ **Product Found**\n\n📦 SKU: {{ $json.sku }}\n💰 Price: {{ $json.price || $json.newprice }}\n📝 Product: {{ $json.productname }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "05eb6363-9e1f-43fc-af7b-46c5f6a86d05",
+      "name": "Send Price Found",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        848,
+        -32
+      ],
+      "webhookId": "021a2c1b-2e5f-4762-8a33-a036f3f39169",
+      "executeOnce": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "btjmQEglnlGJbr1e",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.aiResponse }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "68b98c1f-694b-40d1-9208-bbe9f0b5bce1",
+      "name": "Send AI Response",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        80,
+        304
+      ],
+      "webhookId": "x1y2z3a4-b5c6-d7e8-f9g0-h1i2j3k4l5m6",
+      "credentials": {
+        "telegramApi": {
+          "id": "btjmQEglnlGJbr1e",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "You are a specialized AI assistant named \"PriceUpdaterBot.\" Your **ONLY** task is to categorize user input and provide the **EXACT** required response based on the following **THREE STRICT RULES**.\n\n**TONE:** Friendly, funny, concise, and professional.\n\n**RULES AND REQUIRED OUTPUTS:**\n\n1. **GREETING/CASUAL:** (e.g., \"hi\", \"hello\", \"good morning\", \"how are you?\")\n   * **OUTPUT (FUN VERSION):** \n   \"Hey there, superstar! 🌟 I'm PriceUpdaterBot, your trusty price detective. Send me a SKU code or product name, and I'll fetch the magic number for you!\"\n   *(Other variations are allowed, e.g., \"Good day, champion! Ready to find some prices? Just give me the SKU or product name!\")*\n\n2. **PRICE LOOKUP/PRODUCT INFO:** (If the user provides *any* SKU code, product name, or asks for a price.)\n   * **ACTION:** You **MUST NOT** answer. Only forward the request to the external system.\n   * **OUTPUT FORMAT:** \n   [[FORWARD_TO_N8N_PRICE_LOOKUP: [USER_INPUT]]]\n   * **EXAMPLE:** \n   [[FORWARD_TO_N8N_PRICE_LOOKUP: Need price for XW-900]]\n\n3. **UNRELATED TOPIC/META-COMMENTARY:** (e.g., weather, jokes, instructions about your role.)\n   * **OUTPUT (FUN VERSION):**\n   \"Oops! 🤖 I'm PriceUpdaterBot, master of prices only. Toss me a SKU or product name, and I’ll serve you the numbers!\"\n\n**CRITICAL INSTRUCTION:** Your response **must be exactly one of the three outputs defined above**. Do not add any extra words, explanations, or commentary. Always be fun and friendly when greeting the user.\n  \n**USER MESSAGE:** {{ $json.message.text }}\n",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -960,
+        16
+      ],
+      "id": "e37f6196-73c6-4921-817f-f0239ec9eca3",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Process AI Response').item.json.chatId }}",
+        "text": "=⚠️ **SKU Not Found**\n\nThe `{{ $('Telegram Trigger').item.json.message.text }}` was not found in our database.\n\nPlease check the SKU and try again, or type /help for assistance.",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "c1b33827-9f1c-4f7e-a3bd-1cb2bd7902c7",
+      "name": "Send SKU Not Found",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        864,
+        224
+      ],
+      "webhookId": "c8b371f2-86e7-49f6-8b14-36a80fa56662",
+      "executeOnce": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "btjmQEglnlGJbr1e",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c05690c8-b28e-4352-9748-2763e8d9b2dd",
+              "leftValue": "={{ $json.sku }}",
+              "rightValue": "={{ $json.sku }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": "={{ false }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        528,
+        112
+      ],
+      "id": "7d52cd10-ceb5-47ea-8f12-c469c98ca956",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "5d6f07c5-78a9-4978-901c-1fadf33685bc",
+              "leftValue": "={{ $json.isWelcomeMessage }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "3e80e197-6563-40b0-a79f-2d75463b80af",
+              "leftValue": "={{ $json.messageText }}",
+              "rightValue": "Hi",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "0e0abf27-955a-4148-b0fb-13e6da6961b3",
+              "leftValue": "={{ $json.messageText }}",
+              "rightValue": "Hello",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "e0b19b3a-2493-4d9b-9918-94b51ef22d9d",
+              "leftValue": "={{ $json.messageText }}",
+              "rightValue": "/start",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "d734cc16-35e4-4744-9be3-4a4a020c4bbb",
+              "leftValue": "={{ $json.messageText }}",
+              "rightValue": "/help",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "3f69fa8b-f94b-4592-a4a0-71f6e681981a",
+              "leftValue": "={{ $json.aiResponse }}",
+              "rightValue": "Welcome",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "2f7857a3-56cc-4710-a895-8426d09fa560",
+      "name": "Is Welcome Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        16
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini AI Agent": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process AI Response": {
+      "main": [
+        [
+          {
+            "node": "Is Welcome Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is SKU Detected?": {
+      "main": [
+        [
+          {
+            "node": "Get Products from Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Products from Supabase": {
+      "main": [
+        [
+          {
+            "node": "Filter Matching SKU",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Matching SKU": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Process AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send Price Found",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send SKU Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Welcome Message?": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is SKU Detected?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "954b026c-465a-43a6-aba3-cc19eb5c0dea",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5229ad676c3a8d293c6db345f673ae85f2faeec97332d940e6b8ecea4c050d50"
+  },
+  "id": "dqo1iLGP875wOKBm",
+  "tags": []
+}
