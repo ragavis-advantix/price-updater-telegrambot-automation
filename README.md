@@ -54,25 +54,6 @@ cd PriceUpdaterBot
 
 ---
 
-## 📝 Development Notes
-
-* **Customization**:
-
-  * Update AI prompts in the “AI Agent” node for different response styles
-  * Modify Supabase table references if database schema changes
-
-* **Scaling**:
-
-  * Additional features like Slack notifications or email reports can be added via n8n
-  * Can be deployed behind NGINX or on a server for continuous operation
-
-* **Testing**:
-
-  * Use known SKU/product codes to test lookup functionality
-  * Check logs in n8n for debugging workflow issues
-
----
-
 ## 👨‍💻 Author
 
 **Ragavi**
